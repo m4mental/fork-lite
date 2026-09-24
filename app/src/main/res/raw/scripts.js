@@ -267,6 +267,19 @@ observer.observe(document.body, { childList: true, subtree: true });
       -webkit-overflow-scrolling: touch !important;
       overscroll-behavior-y: contain !important;
     }
+    /* Suppress circular loading spinner in reels for instant transitions */
+    div.vertically-snappable [role="progressbar"],
+    div.vertically-snappable [aria-label*="Loading" i],
+    div.vertically-snappable [aria-label*="loading" i],
+    div.vertically-snappable [data-sigil*="loading"],
+    div.vertically-snappable .loading-overlay,
+    div.vertically-snappable svg circle[stroke-dasharray],
+    div.vertically-snappable div:has(> svg circle[stroke-dasharray]) {
+      display: none !important;
+      opacity: 0 !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+    }
   `;
   (document.head || document.documentElement).appendChild(style);
 })();
@@ -392,10 +405,22 @@ observer.observe(document.body, { childList: true, subtree: true });
 })();
 
 // ============================================================================
-// Fork Lite Video Turbo Engine: Instant Preloading & Zero-Buffering for Reels & Videos
+// Fork Lite Video Turbo Engine: Instant Play & Spinner-Free Preloading
 // ============================================================================
 (function() {
   const processedVideos = new WeakSet();
+
+  function hideSpinners(root) {
+    if (!root) return;
+    const spinners = root.querySelectorAll(
+      '[role="progressbar"], [aria-label*="Loading" i], [aria-label*="loading" i], .loading-overlay, [data-sigil*="loading"]'
+    );
+    spinners.forEach(s => {
+      s.style.setProperty('display', 'none', 'important');
+      s.style.setProperty('opacity', '0', 'important');
+      s.style.setProperty('visibility', 'hidden', 'important');
+    });
+  }
 
   function optimizeVideo(video) {
     if (!video || processedVideos.has(video)) return;
@@ -409,17 +434,22 @@ observer.observe(document.body, { childList: true, subtree: true });
       video.setAttribute('x5-video-player-type', 'h5');
       video.disableRemotePlayback = true;
 
-      // Ensure rapid resumption without spinner freeze
+      // When video is ready or playing, immediately dismiss any circular spinner
+      const onReady = () => {
+        const reelContainer = video.closest('div.vertically-snappable');
+        if (reelContainer) hideSpinners(reelContainer);
+      };
+
+      video.addEventListener('canplay', onReady, { passive: true });
+      video.addEventListener('playing', onReady, { passive: true });
+      video.addEventListener('loadeddata', onReady, { passive: true });
+
+      // Rapid resumption without pause
       video.addEventListener('waiting', () => {
         if (video.paused && video.currentTime > 0) {
           video.play().catch(() => {});
         }
       }, { passive: true });
-
-      // Immediate pre-fetch of initial video bytes
-      if (video.readyState === 0 && (video.src || video.querySelector('source') || video.currentSrc)) {
-        video.load();
-      }
     } catch (e) {}
   }
 
@@ -448,6 +478,7 @@ observer.observe(document.body, { childList: true, subtree: true });
   // Next-Reel Pre-buffer: Proactively warm up to 5 adjacent reels ahead in cache
   const PRELOAD_REEL_AHEAD_COUNT = 5;
   const preloadedUrls = new Set();
+  let currentActiveReel = null;
 
   function prebufferVideoUrl(url) {
     if (!url || preloadedUrls.has(url) || url.startsWith('blob:')) return;
@@ -461,7 +492,7 @@ observer.observe(document.body, { childList: true, subtree: true });
     } catch (e) {}
   }
 
-  function prebufferAdjacentReels() {
+  function handleReelsTransition() {
     const reels = document.querySelectorAll('div.vertically-snappable');
     if (!reels || reels.length === 0) return;
 
@@ -470,14 +501,33 @@ observer.observe(document.body, { childList: true, subtree: true });
 
     for (let i = 0; i < reels.length; i++) {
       const rect = reels[i].getBoundingClientRect();
-      if (rect.top >= -vh * 0.5 && rect.top <= vh * 0.5) {
+      if (rect.top >= -vh * 0.45 && rect.top <= vh * 0.45) {
         activeIdx = i;
         break;
       }
     }
 
     if (activeIdx !== -1) {
-      // Buffer from active - 1 (previous reel) up to active + 5 (next 5 reels ahead)
+      const activeReel = reels[activeIdx];
+
+      // Instant Playback on active reel change (eliminates wait spinner)
+      if (activeReel !== currentActiveReel) {
+        currentActiveReel = activeReel;
+        hideSpinners(activeReel);
+
+        const activeVideo = activeReel.querySelector('video');
+        if (activeVideo) {
+          optimizeVideo(activeVideo);
+          if (activeVideo.paused) {
+            const playPromise = activeVideo.play();
+            if (playPromise !== undefined) {
+              playPromise.then(() => hideSpinners(activeReel)).catch(() => {});
+            }
+          }
+        }
+      }
+
+      // Proactively buffer 5 reels ahead safely without resetting elements
       for (let offset = -1; offset <= PRELOAD_REEL_AHEAD_COUNT; offset++) {
         if (offset === 0) continue;
         const targetReel = reels[activeIdx + offset];
@@ -485,14 +535,10 @@ observer.observe(document.body, { childList: true, subtree: true });
           const videos = targetReel.querySelectorAll('video');
           videos.forEach(v => {
             optimizeVideo(v);
-            if (v.readyState < 2) {
-              try { v.load(); } catch (e) {}
-            }
             if (v.src) prebufferVideoUrl(v.src);
             if (v.currentSrc) prebufferVideoUrl(v.currentSrc);
           });
 
-          // Check for data-video-url or data-src if Facebook defers video creation
           targetReel.querySelectorAll('[data-video-url], [data-src], source').forEach(el => {
             const u = el.getAttribute('data-video-url') || el.getAttribute('data-src') || el.src;
             if (u) prebufferVideoUrl(u);
@@ -502,36 +548,17 @@ observer.observe(document.body, { childList: true, subtree: true });
     }
   }
 
-  // Prebuffer nearby videos across feed and reels within 2500px range
-  function prebufferNearbyVideos() {
-    const allVideos = document.querySelectorAll('video');
-    const vh = window.innerHeight;
-    allVideos.forEach(v => {
-      const rect = v.getBoundingClientRect();
-      if (rect.top >= -1000 && rect.top <= vh + 2500) {
-        optimizeVideo(v);
-        if (v.readyState < 2) {
-          try { v.load(); } catch (e) {}
-        }
-      }
-    });
-  }
-
   let scrollThrottle = null;
   const onReelScroll = () => {
     if (scrollThrottle) return;
     scrollThrottle = setTimeout(() => {
       scrollThrottle = null;
-      prebufferAdjacentReels();
-      prebufferNearbyVideos();
-    }, 100);
+      handleReelsTransition();
+    }, 60);
   };
 
   window.addEventListener('scroll', onReelScroll, { passive: true });
   window.addEventListener('touchmove', onReelScroll, { passive: true });
 
-  setTimeout(() => {
-    prebufferAdjacentReels();
-    prebufferNearbyVideos();
-  }, 600);
+  setTimeout(handleReelsTransition, 500);
 })();
