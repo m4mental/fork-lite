@@ -139,7 +139,7 @@ fun NobookWebView(
 
     val rawThemeColor by viewModel.themeColor
     val isAmoled by settingsVM.amoledBlack.collectAsState()
-    val themeColor = if (isAmoled && rawThemeColor != Color.White) Color.Black else rawThemeColor
+    val themeColor = if (isAmoled) Color.Black else rawThemeColor
 
     // Manual handling to fix visual & padding bug on settings dialog.
     var isImmersiveMode by rememberSaveable { mutableStateOf(settingsVM.immersiveMode.value) }
@@ -287,7 +287,7 @@ fun NobookWebView(
                     ThemeChange { 
                         val color = Color(it)
                         val isAmoledActive = settingsVM.amoledBlack.value
-                        if (isAmoledActive && color != Color.White && color != Color.Transparent) {
+                        if (isAmoledActive) {
                             viewModel.setThemeColor(Color.Black)
                         } else {
                             viewModel.setThemeColor(color)

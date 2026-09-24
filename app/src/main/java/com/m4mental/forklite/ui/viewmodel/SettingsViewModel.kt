@@ -65,7 +65,7 @@ class SettingsViewModel(
     )
     val amoledBlack = dataStore.amoledBlack.stateIn(
         scope = viewModelScope,
-        initialValue = false,
+        initialValue = true,
         started = SharingStarted.Eagerly
     )
     val hideSuggested = dataStore.hideSuggested.stateIn(

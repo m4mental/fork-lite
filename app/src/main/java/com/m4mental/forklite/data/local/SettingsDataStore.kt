@@ -70,7 +70,7 @@ class SettingsDataStore(private val context: Context) {
         context.dataStore.edit { it[PINCH_TO_ZOOM] = pinchToZoom }
     }
 
-    val amoledBlack = context.dataStore.data.map { it[AMOLED_BLACK] ?: false }
+    val amoledBlack = context.dataStore.data.map { it[AMOLED_BLACK] ?: true }
     suspend fun setAmoledBlack(amoledBlack: Boolean) {
         context.dataStore.edit { it[AMOLED_BLACK] = amoledBlack }
     }
