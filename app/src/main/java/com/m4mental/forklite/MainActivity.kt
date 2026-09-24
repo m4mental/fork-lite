@@ -15,6 +15,11 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
+        // Enable WebView inspection & debugging
+        try {
+            android.webkit.WebView.setWebContentsDebuggingEnabled(true)
+        } catch (_: Exception) {}
+
         // Pre-warm Chromium engine asynchronously so it loads concurrently with Compose UI
         Thread {
             try {

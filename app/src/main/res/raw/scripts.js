@@ -1,4 +1,84 @@
 
+// ============================================================================
+// Fork Lite Data Saver Engine: Unlock & Enable Data Saver on Wi-Fi and Cellular
+// ============================================================================
+(function() {
+  // 1. Spoof Network Information API so Facebook enables Data Saver even on Wi-Fi
+  try {
+    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (conn) {
+      Object.defineProperty(conn, 'saveData', {
+        get: () => true,
+        configurable: true
+      });
+      Object.defineProperty(conn, 'type', {
+        get: () => 'cellular',
+        configurable: true
+      });
+      Object.defineProperty(conn, 'effectiveType', {
+        get: () => '3g',
+        configurable: true
+      });
+    }
+  } catch (e) {}
+
+  // 2. Proactively find and unlock any disabled/greyed-out Data Saver toggles
+  function unlockDataSaver() {
+    const candidates = document.querySelectorAll(
+      '[aria-label*="Data saver" i], [aria-label*="Data Saver" i], [data-sigil*="data_saver"], [data-testid*="data_saver"], div[role="menuitem"], div[role="radio"], div[role="switch"], div[role="checkbox"], label'
+    );
+
+    candidates.forEach(el => {
+      const text = (el.textContent || '') + ' ' + (el.getAttribute('aria-label') || '');
+      if (/data\s*saver|डेटा\s*सेवर/i.test(text)) {
+        el.removeAttribute('disabled');
+        el.setAttribute('aria-disabled', 'false');
+        el.classList.remove('disabled', '_disabled', 'inactive', 'x17qophe');
+        el.style.setProperty('pointer-events', 'auto', 'important');
+        el.style.setProperty('opacity', '1', 'important');
+        el.style.setProperty('filter', 'none', 'important');
+        el.style.setProperty('cursor', 'pointer', 'important');
+
+        el.querySelectorAll('input, [role="switch"], [role="radio"], [role="checkbox"], div').forEach(child => {
+          child.removeAttribute('disabled');
+          child.setAttribute('aria-disabled', 'false');
+          child.style.setProperty('pointer-events', 'auto', 'important');
+          child.style.setProperty('opacity', '1', 'important');
+          child.style.setProperty('filter', 'none', 'important');
+        });
+      }
+    });
+
+    // Also scan all dialogs / popup menus for disabled video setting items
+    document.querySelectorAll('div[role="dialog"], div[role="menu"], div[role="region"]').forEach(dialog => {
+      dialog.querySelectorAll('[aria-disabled="true"], [disabled]').forEach(item => {
+        const text = (item.textContent || '') + ' ' + (item.getAttribute('aria-label') || '');
+        if (/data\s*saver|डेटा\s*सेवर|quality|गुणवत्ता/i.test(text)) {
+          item.removeAttribute('disabled');
+          item.setAttribute('aria-disabled', 'false');
+          item.style.setProperty('pointer-events', 'auto', 'important');
+          item.style.setProperty('opacity', '1', 'important');
+          item.style.setProperty('filter', 'none', 'important');
+          item.style.setProperty('cursor', 'pointer', 'important');
+        }
+      });
+    });
+  }
+
+  unlockDataSaver();
+
+  const dsObserver = new MutationObserver(() => {
+    unlockDataSaver();
+  });
+
+  dsObserver.observe(document.documentElement || document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['aria-disabled', 'disabled', 'class', 'style']
+  });
+})();
+
 // desktop mode identifier
 (() => {
     window.isDesktopMode = () => {
@@ -247,6 +327,10 @@ observer.observe(document.body, { childList: true, subtree: true });
     body, div, p, span, a, img, video {
       -webkit-user-select: none;
       user-select: none;
+    }
+    button, label, [role="button"], [role="switch"], [role="radio"], [role="checkbox"], [role="menuitem"], input, select {
+      pointer-events: auto !important;
+      cursor: pointer !important;
     }
     input, textarea, [contenteditable="true"], .native-text, .native-text * {
       -webkit-user-select: text !important;
