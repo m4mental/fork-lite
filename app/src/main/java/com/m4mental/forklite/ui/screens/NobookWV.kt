@@ -169,13 +169,32 @@ fun NobookWebView(
     val loadingState = state.loadingState
 
     LaunchedEffect(loadingState, userScripts) {
-        if (loadingState is LoadingState.Finished) {
-            userScripts?.let { scripts ->
-                navigator.evaluateJavaScript(scripts) {
+        when (loadingState) {
+            is LoadingState.Loading -> {
+                if (loadingState.progress >= 0.35f) {
+                    userScripts?.let { scripts ->
+                        navigator.evaluateJavaScript(scripts) {}
+                    }
                     isLoading = false
                 }
             }
+            is LoadingState.Finished -> {
+                userScripts?.let { scripts ->
+                    navigator.evaluateJavaScript(scripts) {}
+                }
+                isLoading = false
+            }
+            else -> {}
         }
+    }
+
+    // Safety fast-dismiss: Never show splash logo for more than 1000ms on startup
+    LaunchedEffect(Unit) {
+        delay(1000)
+        userScripts?.let { scripts ->
+            navigator.evaluateJavaScript(scripts) {}
+        }
+        isLoading = false
     }
 
     if (isError && isLoading) {
