@@ -13,3 +13,6 @@ local.properties
 /build/
 /app/build/
 *.apk
+*.jks
+*.keystore
+keystore_base64.txt

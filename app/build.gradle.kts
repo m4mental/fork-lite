@@ -36,7 +36,7 @@ extensions.configure<ApplicationExtension> {
                 "proguard-rules.pro"
             )
         }
-        debug { applicationIdSuffix = ".test" }
+        debug { }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11

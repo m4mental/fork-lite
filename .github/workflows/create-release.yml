@@ -18,11 +18,11 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '21'
           cache: 'gradle'
 
       - name: Build APK
@@ -99,8 +99,8 @@ jobs:
       - name: Rename APK for Release
         run: |
           TAG_NAME="${{ github.event.inputs.release_tag || github.ref_name }}"
-          mv app-release.apk "Nobook_${TAG_NAME}.apk"
-          if [ ! -f "Nobook_${TAG_NAME}.apk" ]; then
+          mv app-release.apk "ForkLite_${TAG_NAME}.apk"
+          if [ ! -f "ForkLite_${TAG_NAME}.apk" ]; then
             echo "Failed to rename APK"
             exit 1
           fi
@@ -118,5 +118,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.release_tag || github.ref_name }}
-          files: Nobook_${{ github.event.inputs.release_tag || github.ref_name }}.apk
+          files: ForkLite_${{ github.event.inputs.release_tag || github.ref_name }}.apk
           body_path: CHANGE.txt
