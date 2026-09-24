@@ -9,6 +9,10 @@ import androidx.lifecycle.viewModelScope
 import com.m4mental.forklite.R
 import com.m4mental.forklite.utils.Script
 import com.m4mental.forklite.utils.fetchScripts
+import com.m4mental.forklite.utils.loadLocalScripts
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 
@@ -28,6 +32,25 @@ class MainViewModel(
             resources,
             settings
         )
+
+        // Observe settings changes from DataStore disk read and user toggles
+        viewModelScope.launch {
+            combine(
+                settings.removeAds,
+                settings.enableDownloadContent,
+                settings.enableCopyToClipboard,
+                settings.stickyNavbar,
+                settings.pinchToZoom,
+                settings.amoledBlack,
+                settings.hideSuggested,
+                settings.hideReels,
+                settings.hideStories,
+                settings.hidePeopleYouMayKnow,
+                settings.hideGroups
+            ) { _ ->
+                loadScripts(resources, settings)
+            }.collect()
+        }
     }
 
     fun setThemeColor(color: Color) {
@@ -53,15 +76,19 @@ class MainViewModel(
             Script(settings.hideGroups.value, R.raw.hide_groups, "hide_groups.js")
         )
 
-        viewModelScope.launch {
-            _scripts.value =
-                fetchScripts(
-                    scripts = scripts,
-                    fallbackContent = { resId ->
-                        resources.openRawResource(resId).bufferedReader()
-                            .use { it.readText() }
-                    }
-                )
+        val fallbackContent: (Int) -> String = { resId ->
+            resources.openRawResource(resId).bufferedReader().use { it.readText() }
+        }
+
+        // 1. Immediately provide local scripts for instant startup (0ms delay)
+        _scripts.value = loadLocalScripts(scripts, fallbackContent)
+
+        // 2. Background silent check for remote updates without blocking UI
+        viewModelScope.launch(Dispatchers.IO) {
+            val remoteScripts = fetchScripts(scripts, fallbackContent)
+            if (remoteScripts.isNotEmpty() && remoteScripts != _scripts.value) {
+                _scripts.value = remoteScripts
+            }
         }
     }
 

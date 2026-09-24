@@ -8,7 +8,13 @@ import io.ktor.client.request.get
 import io.ktor.http.HttpStatusCode
 
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+
 const val SCRIPT_SRC = "https://raw.githubusercontent.com/m4mental/fork-lite/refs/heads/main/app/src/main/res/raw/"
+
+private val sharedHttpClient by lazy { HttpClient(OkHttp) }
 
 data class Script(
     val isEnabled: Boolean,
@@ -16,25 +22,38 @@ data class Script(
     val scriptTitle: String
 )
 
+fun loadLocalScripts(
+    scripts: List<Script>,
+    fallbackContent: (Int) -> String
+): String {
+    return buildString {
+        scripts.filter { it.isEnabled }.forEach { script ->
+            append(fallbackContent(script.resourceId))
+        }
+    }
+}
+
 suspend fun fetchScripts(
     scripts: List<Script>,
     fallbackContent: (Int) -> String
 ): String {
-    val httpClient = HttpClient(OkHttp)
-    return buildString {
-        scripts.filter { it.isEnabled }.forEach { script ->
-            val content =
+    val enabledScripts = scripts.filter { it.isEnabled }
+    if (enabledScripts.isEmpty()) return ""
+
+    return coroutineScope {
+        enabledScripts.map { script ->
+            async {
                 runCatching {
-                    val res = httpClient.get(SCRIPT_SRC + script.scriptTitle)
+                    val res = sharedHttpClient.get(SCRIPT_SRC + script.scriptTitle)
                     if (res.status == HttpStatusCode.OK) {
                         res.body() as String
                     } else {
-                        throw Exception()
+                        fallbackContent(script.resourceId)
                     }
                 }.getOrElse {
                     fallbackContent(script.resourceId)
                 }
-            append(content)
-        }
+            }
+        }.awaitAll().joinToString(separator = "")
     }
 }

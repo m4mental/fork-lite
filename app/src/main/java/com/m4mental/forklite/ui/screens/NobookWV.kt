@@ -137,7 +137,10 @@ fun NobookWebView(
         )
     }
 
-    val themeColor by viewModel.themeColor
+    val rawThemeColor by viewModel.themeColor
+    val isAmoled by settingsVM.amoledBlack.collectAsState()
+    val themeColor = if (isAmoled && rawThemeColor != Color.White) Color.Black else rawThemeColor
+
     // Manual handling to fix visual & padding bug on settings dialog.
     var isImmersiveMode by rememberSaveable { mutableStateOf(settingsVM.immersiveMode.value) }
 
@@ -158,7 +161,7 @@ fun NobookWebView(
         isImmersiveMode = immersive
     }
 
-    LaunchedEffect(isImmersiveMode, themeColor.value) {
+    LaunchedEffect(isImmersiveMode, themeColor.value, isAmoled) {
         setWindow(isImmersiveMode)
     }
 
@@ -245,13 +248,11 @@ fun NobookWebView(
             val cookieManager = CookieManager.getInstance()
             cookieManager.setAcceptCookie(true)
             cookieManager.setAcceptThirdPartyCookies(webView, true)
-            cookieManager.flush()
 
             state.webSettings.apply {
                 isJavaScriptEnabled = true
 
                 androidWebSettings.apply {
-                    //isDebugInspectorInfoEnabled = true
                     domStorageEnabled = true
                     hideDefaultVideoPoster = true
                     mediaPlaybackRequiresUserGesture = false
@@ -264,7 +265,15 @@ fun NobookWebView(
                     "SettingsBridge"
                 )
                 addJavascriptInterface(
-                    ThemeChange { viewModel.setThemeColor(Color(it)) },
+                    ThemeChange { 
+                        val color = Color(it)
+                        val isAmoledActive = settingsVM.amoledBlack.value
+                        if (isAmoledActive && color != Color.White && color != Color.Transparent) {
+                            viewModel.setThemeColor(Color.Black)
+                        } else {
+                            viewModel.setThemeColor(color)
+                        }
+                    },
                     "ThemeBridge"
                 )
                 addJavascriptInterface(
@@ -277,14 +286,25 @@ fun NobookWebView(
                 )
 
                 setLayerType(View.LAYER_TYPE_HARDWARE, null)
+                setBackgroundColor(0xFF000000.toInt())
 
                 overScrollMode = View.OVER_SCROLL_NEVER
                 isVerticalScrollBarEnabled = false
                 isHorizontalScrollBarEnabled = false
 
-                settings.setSupportZoom(true)
-                settings.builtInZoomControls = true
-                settings.displayZoomControls = false
+                settings.apply {
+                    setSupportZoom(true)
+                    builtInZoomControls = true
+                    displayZoomControls = false
+                    cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                    databaseEnabled = true
+                    useWideViewPort = true
+                    loadWithOverviewMode = true
+                    loadsImagesAutomatically = true
+                    setOffscreenPreRaster(true)
+                    mediaPlaybackRequiresUserGesture = false
+                    mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                }
             }
         }
     )
